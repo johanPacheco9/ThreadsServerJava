@@ -5,8 +5,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class Main {
+    //Version14
     public static void main(String[] args) {
-        System.out.println("Java Server Socket");
+        System.out.println("Esperando clientes...");
 
         try {
             ServerSocket serverSocket = new ServerSocket(8081);
@@ -14,7 +15,6 @@ public class Main {
             while (true) {
                 // Accept a new client connection
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("New client connected");
                 Thread clientThread = new Thread(new ClientHandler(clientSocket));
                 
                 clientThread.start();
