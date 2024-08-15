@@ -1,80 +1,96 @@
 package johan.Services;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import com.google.gson.Gson;
-
 import johan.Models.User;
+import johan.Server.Session;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.net.Socket;
 
 public class UserService implements IUserService {
+    private final Gson gson = new Gson();
+    private final Map<Session, String> sessionUserMap = new HashMap<>();
+    private final Set<String> connectedUsers = new HashSet<>();
 
-    private static List<Socket> clients;
-    private Socket clientSocket;
-    private Gson gson = new Gson();
+    @Override
+    public void addSession(Session session, String userName) {
+        synchronized (sessionUserMap) {
+            sessionUserMap.put(session, userName);
+            connectedUsers.add(userName);
+        }
+    }
 
-    // Constructor para aceptar un Socket y lista de clientes
-    public UserService(Socket socket, List<Socket> clients) {
-        this.clientSocket = socket;
-        UserService.clients = clients;
+    @Override
+    public void removeSession(Session session) {
+        synchronized (sessionUserMap) {
+            String userName = sessionUserMap.remove(session);
+            if (userName != null) {
+                connectedUsers.remove(userName);
+                notifyUserDisconnected(userName);
+            }
+        }
     }
 
     @Override
     public CompletableFuture<Void> sendMessage(User user) {
         return CompletableFuture.runAsync(() -> {
             String messageJson = gson.toJson(user);
-            synchronized (clients) {
-                for (Socket socket : clients) {
-                    try {
-                        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                        out.println(messageJson);
-                    } catch (IOException e) {
-                        e.printStackTrace();
+            synchronized (sessionUserMap) {
+                for (Map.Entry<Session, String> entry : sessionUserMap.entrySet()) {
+                    if (entry.getKey().getSocket() != null && !entry.getKey().getSocket().isClosed()) {
+                        entry.getKey().write(messageJson);
                     }
                 }
             }
         });
     }
 
-    @Override
-    public CompletableFuture<User> getMessage() {
-        return CompletableFuture.supplyAsync(() -> {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
-
-                // Recibe el JSON del servidor
-                String jsonString = in.readLine();
-                if (jsonString != null) {
-                    User receivedUser = gson.fromJson(jsonString, User.class);
-                    System.out.println("usuario: " + receivedUser.getUserName());
-                    System.out.println("mensaje: " + receivedUser.getMessage());
-
-                    // Crear un mensaje de respuesta
-                    User responseUser = new User();
-                    responseUser.setUserName("Server");
-                    responseUser.setMessage("Received your message");
-
-                    // Convertir el objeto User a JSON y enviar
-                    String responseJson = gson.toJson(responseUser);
-                    out.println(responseJson);
-
-                    return receivedUser;
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+    public void notifyUserConnected(String userName) {
+        // Asegúrate de que el usuario se añade a la lista de usuarios conectados
+        connectedUsers.add(userName);
+    
+        // Crear mensaje de usuarios conectados
+        String userListMessage = "Usuarios conectados: " + String.join(", ", connectedUsers);
+        
+        // Enviar el mensaje a todos los clientes conectados excepto al que envía
+        synchronized (sessionUserMap) {
+            for (Map.Entry<Session, String> entry : sessionUserMap.entrySet()) {
+                if (!entry.getValue().equals(userName)) { // No enviar al mismo usuario
+                    entry.getKey().write(userListMessage);
                 }
             }
-            return null;
-        });
+        }
+    }
+    
+    @Override
+    public void notifyUserDisconnected(String userName) {
+        String userListMessage = "Connected users: " + getConnectedUserNames();
+        synchronized (sessionUserMap) {
+            for (Session session : sessionUserMap.keySet()) {
+                session.write(userListMessage);
+            }
+        }
+    }
+
+    @Override
+    public String getUserName(Socket socket) {
+        synchronized (sessionUserMap) {
+            for (Map.Entry<Session, String> entry : sessionUserMap.entrySet()) {
+                if (entry.getKey().getSocket().equals(socket)) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public String getConnectedUserNames() {
+        synchronized (sessionUserMap) {
+            return String.join(", ", connectedUsers);
+        }
     }
 }

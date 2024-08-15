@@ -2,6 +2,8 @@ package johan.Models;
 
 import java.io.Serializable;
 
+import com.google.gson.Gson;
+
 public class User implements Serializable {
     private int Id;
     private String UserName;
@@ -9,6 +11,14 @@ public class User implements Serializable {
 
     public User() {}
 
+    public User(int id, String userName, String message) {
+        this.Id = id;
+        this.UserName = userName;
+        this.Message = message;
+    }
+    
+
+    
     public int getId() {
         return Id;
     }

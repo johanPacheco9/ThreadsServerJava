@@ -7,6 +7,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 
+
+//User receivedUser = new Gson().fromJson(message, User.class);
+
 public class Session {
     private BufferedReader reader;
     private BufferedWriter writer;
@@ -53,13 +56,23 @@ public class Session {
 
     public boolean close() {
         try {
-            if (reader != null) reader.close();
-            if (writer != null) writer.close();
-            if (socket != null) socket.close();
+            if (reader != null) {
+                reader.close();
+                reader = null; 
+            }
+            if (writer != null) {
+                writer.close();
+                writer = null;
+            }
+            if (socket != null) {
+                socket.close();
+                socket = null;
+            }
             return true;
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
     }
+    
 }

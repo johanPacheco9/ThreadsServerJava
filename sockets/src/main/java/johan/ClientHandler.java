@@ -49,16 +49,14 @@ public class ClientHandler implements Runnable {
                         sessionUserMap.put(session, userName);
                     }
 
-                    String userListMessage = "Connected users: " + getConnectedUserNames();
-                    session.write(userListMessage);
-
-                    broadcastMessage(message);
+                    // No enviar el mensaje de bienvenida al propio usuario
+                    broadcastMessage(message, true);
                 }
             }
 
             while ((message = session.read()) != null) {
                 System.out.println("Received from client: " + message);
-                broadcastMessage(message);
+                broadcastMessage(message, false);
             }
         } finally {
             // Cleanup cuando el cliente se desconecta
@@ -82,10 +80,10 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void broadcastMessage(String message) {
+    private void broadcastMessage(String message, boolean excludeCurrent) {
         synchronized (sessions) {
             for (Session session : sessions) {
-                if (session.getSocket() != null && !session.getSocket().isClosed()) {
+                if (session.getSocket() != null && !session.getSocket().isClosed() && (!excludeCurrent || session != this.session)) {
                     session.write(message);
                 }
             }
@@ -94,20 +92,20 @@ public class ClientHandler implements Runnable {
 
     private void UserConnected(String userName) {
         // Notifica a todos los clientes que un nuevo usuario se ha conectado
-        broadcastMessage("User connected: " + userName);
+        broadcastMessage("User connected: " + userName, true);
 
         // Envía la lista de usuarios conectados a todos los clientes
         String userListMessage = "Connected users: " + getConnectedUserNames();
-        broadcastMessage(userListMessage);
+        broadcastMessage(userListMessage, true);
 
         System.out.println("Usuarios conectados actualmente: " + getConnectedUserNames());
     }
 
     private void UserDisconnected(String userName) {
-        broadcastMessage("User disconnected: " + userName);
+        broadcastMessage("User disconnected: " + userName, true);
         System.out.println("Usuarios conectados actualmente: " + getConnectedUserNames());
         String userListMessage = "Connected users: " + getConnectedUserNames();
-        broadcastMessage(userListMessage);
+        broadcastMessage(userListMessage, true);
     }
 
     private String getConnectedUserNames() {
